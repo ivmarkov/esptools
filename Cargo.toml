@@ -1,0 +1,26 @@
+[package]
+name = "esptools"
+version = "0.1.0"
+authors = ["Ivan Markov <ivan.markov@gmail.com>"]
+edition = "2021"
+resolver = "2"
+categories = ["embedded", "hardware-support"]
+keywords = ["embedded", "esp32"]
+#description = "TBD"
+repository = "https://github.com/ivmarkov/esptools"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+rust-version = "1.83"
+
+[dependencies]
+zip = "2"
+sha1 = "0.10"
+hex = "0.4"
+directories = "3"
+
+[build-dependencies]
+reqwest = { version = "0.12", features = ["blocking"] }
+anyhow = "1"
+zip = "2"
+sha1 = "0.10"
+hex = "0.4"
