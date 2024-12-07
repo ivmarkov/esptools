@@ -15,9 +15,19 @@ Bundles the ESP tools as a Rust library.
    This is exactly what this crate automates!
 
 ---
-**NOTE**
+**NOTE: Supported platforms**
 
 `esptools` will only run on those platforms where Espressif supplies pre-built binaries. I.e. Linux / MacOS / Windows X86_64 as well as Linux ARM64 and ARM32.
+
+**NOTE: Licensing**
+
+While the `esptools` crate is licensed under Apache + MIT (as usual with Rust), the bundled (and thus distributed) binaries of `esptool`, `espsecure` and `espefuse` [are licensed under the **GPL v2**](https://github.com/espressif/esptool/blob/master/LICENSE).
+
+With that said, [distributing those should be OK](https://www.reddit.com/r/opensource/comments/nok8lg/include_binaries_of_a_gpl_licensed_program/), as we are providing a [link](https://github.com/espressif/esptool) to the upstream Espressif GIT repo containing the binaries' source code, as well as [the download location of the binaries themselves](https://github.com/espressif/esptool/releases/tag/v4.8.1).
+
+Let us know if you think otherwise!
+
+If you distribute - outside of your premises and e.g. the factory flashing your chips - a binary using this library, you might want to include these links in your binary documentation though!
 
 ---
 
