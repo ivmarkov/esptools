@@ -6,21 +6,32 @@ edition = "2021"
 resolver = "2"
 categories = ["embedded", "hardware-support"]
 keywords = ["embedded", "esp32"]
-#description = "TBD"
+description = "esptools (esptool, espsecure and espefuse) bundler"
 repository = "https://github.com/ivmarkov/esptools"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 rust-version = "1.83"
 
+[[bin]]
+name = "esptools"
+required-features = ["bin"]
+
+
+[features]
+default = ["bin"]
+bin = ["env_logger"]
+
 [dependencies]
+log = "0.4"
 zip = "2"
 sha1 = "0.10"
 hex = "0.4"
 directories = "3"
+env_logger = { version = "0.11", optional = true }
 
 [build-dependencies]
-reqwest = { version = "0.12", features = ["blocking"] }
-anyhow = "1"
+log = "0.4"
 zip = "2"
 sha1 = "0.10"
 hex = "0.4"
+reqwest = { version = "0.12", features = ["blocking"] }

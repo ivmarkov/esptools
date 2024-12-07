@@ -1,6 +1,6 @@
 # esptools
 
-TBD
+[Esp tools](https://github.com/espressif/esptool) (`esptool`, `espsecure` and `espefuse`) bundler.
 
 [![CI](https://github.com/ivmarkov/esptools/actions/workflows/ci.yml/badge.svg)](https://github.com/ivmarkov/esptools/actions/workflows/ci.yml)
 [![crates.io](https://img.shields.io/crates/v/esptools.svg)](https://crates.io/crates/esptools)

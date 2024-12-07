@@ -1,6 +1,16 @@
-use std::{path::PathBuf, sync::Mutex};
+//! A module for bundling the Espressif `esptools` binaries with a Rust application.
+//! See https://github.com/espressif/esptool/releases
 
+use core::fmt::{self, Display};
+
+use std::ffi::OsStr;
+use std::path::PathBuf;
+use std::sync::Mutex;
+use std::{fs, io};
+
+use log::info;
 pub use zippedtools::Tool;
+use zippedtools::ZipError;
 
 mod zippedtools;
 
@@ -23,11 +33,36 @@ impl Tool {
     }
 }
 
+/// Error type for the `Tools` struct
 #[derive(Debug)]
 pub enum ToolsError {
-    AlreadyCreated,
+    /// The tools have already been mounted
+    AlreadyMounted,
+    /// The tools could not be mounted
+    MountFailed,
+    /// A ZIP error occurred
+    Zip(ZipError),
 }
 
+impl Display for ToolsError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::AlreadyMounted => write!(f, "Tools already created"),
+            Self::MountFailed => write!(f, "Tools creation failed"),
+            Self::Zip(e) => write!(f, "Zip error: {e}"),
+        }
+    }
+}
+
+impl core::error::Error for ToolsError {}
+
+impl From<ZipError> for ToolsError {
+    fn from(e: ZipError) -> Self {
+        Self::Zip(e)
+    }
+}
+
+/// A struct for managing the Espressif `esptools` binaries
 pub struct Tools(PathBuf);
 
 impl Tools {
@@ -40,14 +75,25 @@ impl Tools {
         env!("ESPEFUSE_SHA1"),
     ];
 
+    /// Mount the tools
+    ///
+    /// This ensures that the tools are expanded in a cache directory private to the crate
+    /// and are ready for use.
+    ///
+    /// Note that the tools can be mounted only once in the application i.e. they are a singleton.
+    ///
+    /// # Returns
+    /// * `Ok(Tools)` if the tools were successfully mounted
+    /// * `Err(ToolsError)` if the tools could not be mounted
     pub fn mount() -> Result<Self, ToolsError> {
         let mut mounted = MOUNTED.lock().unwrap();
 
         if *mounted {
-            Err(ToolsError::AlreadyCreated)?;
+            Err(ToolsError::AlreadyMounted)?;
         }
 
-        let project_dirs = directories::ProjectDirs::from("org", "ivmarkov", "esptools").unwrap();
+        let project_dirs = directories::ProjectDirs::from("org", "ivmarkov", "esptools")
+            .ok_or(ToolsError::MountFailed)?;
 
         let tools_dir = project_dirs.cache_dir().to_path_buf();
         let mut zip = None;
@@ -56,35 +102,52 @@ impl Tools {
             let tool_file = tools_dir.join(tool.expanded_name(WINDOWS));
 
             if !tool_file.exists() {
+                fs::create_dir_all(tool_file.parent().unwrap()).map_err(ZipError::Io)?;
+
                 if zip.is_none() {
-                    zip = Some(
-                        zippedtools::ZippedTools::new(
-                            SliceReader::new(Self::ESPTOOLS_ZIP),
-                            WINDOWS,
-                        )
-                        .unwrap(),
-                    );
+                    zip = Some(zippedtools::ZippedTools::new(
+                        SliceReader::new(Self::ESPTOOLS_ZIP),
+                        WINDOWS,
+                    )?);
                 }
 
-                zip.as_mut().unwrap().extract(tool, &tool_file).unwrap();
-
-                // TODO: chown
+                zip.as_mut().unwrap().extract(tool, &tool_file)?;
             }
         }
 
         *mounted = true;
+        info!("Tools mounted in `{}`", tools_dir.display());
 
         Ok(Self(tools_dir))
     }
 
-    pub fn exec(&self, tool: Tool, args: &[&str]) -> std::process::ExitStatus {
+    /// Execute a tool with the provided arguments.
+    ///
+    /// # Arguments
+    /// * `tool` - the tool to execute
+    /// * `args` - the arguments to pass to the tool
+    ///
+    /// # Returns
+    /// * `Ok(ExitStatus)` if the tool was executed successfully
+    /// * `Err(io::Error)` if the tool could not be executed
+    pub fn exec<I>(&self, tool: Tool, args: I) -> io::Result<std::process::ExitStatus>
+    where
+        I: IntoIterator,
+        I::Item: AsRef<OsStr>,
+    {
+        info!("Executing `{tool}`");
+
         let tool_file = self.0.join(tool.expanded_name(WINDOWS));
 
         let mut cmd = std::process::Command::new(tool_file);
 
         cmd.args(args);
 
-        cmd.status().unwrap()
+        let result = cmd.status();
+
+        info!("Status {result:?}");
+
+        result
     }
 }
 
@@ -92,6 +155,8 @@ impl Drop for Tools {
     fn drop(&mut self) {
         let mut mounted = MOUNTED.lock().unwrap();
         *mounted = false;
+
+        info!("Tools unmounted");
     }
 }
 
@@ -106,7 +171,7 @@ impl<'a> SliceReader<'a> {
     }
 }
 
-impl<'a> std::io::Read for SliceReader<'a> {
+impl std::io::Read for SliceReader<'_> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         let n = buf.len().min(self.slice.len() - self.position);
 
@@ -118,7 +183,7 @@ impl<'a> std::io::Read for SliceReader<'a> {
     }
 }
 
-impl<'a> std::io::Seek for SliceReader<'a> {
+impl std::io::Seek for SliceReader<'_> {
     fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
         let position = match pos {
             std::io::SeekFrom::Start(n) => {
