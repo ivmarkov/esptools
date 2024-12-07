@@ -17,7 +17,7 @@ Bindles the ESP tools as a Rust library.
 ---
 **NOTE**
 
-`esptool` will only run on those platforms where Espressif supplies pre-build tools. I.e. Linux / MacOS / Windows X86_64 as well as Linux ARM64 and ARM32.
+`esptools` will only run on those platforms where Espressif supplies pre-build tools. I.e. Linux / MacOS / Windows X86_64 as well as Linux ARM64 and ARM32.
 
 ---
 
