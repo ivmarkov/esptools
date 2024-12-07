@@ -8,7 +8,7 @@
 
 Bundles the ESP tools as a Rust library.
 
-**Q:** Why do I need it? Espressif already distributes [self-contained pre-built executables for all the major platforms](https://github.com/espressif/esptool/releases/tag/v4.8.1)?
+**Q:** Why do I need it? Espressif already provides [self-contained pre-built executables for all the major platforms](https://github.com/espressif/esptool/releases/tag/v4.8.1)?
 
 **A:** To use these from a `build.rs` script or other Rust code, you still have to download the .ZIP corresponding to your OS, extract it
    and then put the executables in your `$PATH` before being able to call the tool of your choice.
