@@ -6,7 +6,7 @@
 [![crates.io](https://img.shields.io/crates/v/esptools.svg)](https://crates.io/crates/esptools)
 [![Matrix](https://img.shields.io/matrix/esp-rs:matrix.org?label=join%20matrix&color=BEC5C9&logo=matrix)](https://matrix.to/#/#esp-rs:matrix.org)
 
-Bindles the ESP tools as a Rust library.
+Bundles the ESP tools as a Rust library.
 
 **Q:** Why do I need it? Espressif already distributes [self-contained pre-built executables for all the major platforms](https://github.com/espressif/esptool/releases/tag/v4.8.1)?
 
