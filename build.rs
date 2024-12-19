@@ -65,7 +65,7 @@ fn main() {
 
     let zip_file_path = zip_file_path.canonicalize().unwrap();
 
-    println!("cargo:rerun-if-changed={}", zip_file_path.display());
+    //println!("cargo:rerun-if-changed={}", zip_file_path.display());
     println!(
         "cargo:rustc-env=ESPTOOLS_ZIP_FILE={}",
         zip_file_path.display()
