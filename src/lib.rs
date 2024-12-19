@@ -23,12 +23,12 @@ impl Tool {
         Tools::ESPTOOLS_SHA1[*self as usize]
     }
 
-    fn expanded_name(&self, windows: bool) -> String {
+    fn expanded_name(&self) -> String {
         format!(
             "{}-{}{}",
             self.basename(),
             self.sha1(),
-            if windows { ".exe" } else { "" }
+            if WINDOWS { ".exe" } else { "" }
         )
     }
 }
@@ -99,7 +99,7 @@ impl Tools {
         let mut zip = None;
 
         for tool in Tool::iter() {
-            let tool_file = tools_dir.join(tool.expanded_name(WINDOWS));
+            let tool_file = tools_dir.join(tool.expanded_name());
 
             if !tool_file.exists() {
                 fs::create_dir_all(tool_file.parent().unwrap()).map_err(ZipError::Io)?;
@@ -121,6 +121,16 @@ impl Tools {
         Ok(Self(tools_dir))
     }
 
+    /// Get the path to a tool
+    ///
+    /// Note that the path is only valid while the `Tools` struct is in scope.
+    ///
+    /// # Arguments
+    /// * `tool` - the tool to get the path for
+    pub fn tool_path(&self, tool: Tool) -> PathBuf {
+        self.0.join(tool.expanded_name())
+    }
+
     /// Execute a tool with the provided arguments.
     ///
     /// # Arguments
@@ -137,9 +147,7 @@ impl Tools {
     {
         info!("Executing `{tool}`");
 
-        let tool_file = self.0.join(tool.expanded_name(WINDOWS));
-
-        let mut cmd = std::process::Command::new(tool_file);
+        let mut cmd = std::process::Command::new(self.tool_path(tool));
 
         cmd.args(args);
 
