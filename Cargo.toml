@@ -10,12 +10,11 @@ description = "esptools (esptool, espsecure and espefuse) bundler"
 repository = "https://github.com/ivmarkov/esptools"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
-rust-version = "1.83"
+rust-version = "1.82"
 
 [[bin]]
 name = "esptools"
 required-features = ["bin"]
-
 
 [features]
 default = ["bin"]
