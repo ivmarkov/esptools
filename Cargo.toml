@@ -33,4 +33,4 @@ log = "0.4"
 zip = "2"
 sha1 = "0.10"
 hex = "0.4"
-reqwest = { version = "0.12", features = ["blocking"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "charset", "blocking"] }
