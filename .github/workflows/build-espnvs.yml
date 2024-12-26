@@ -1,6 +1,7 @@
 name: Build espnvs
 
-on: [push, pull_request]
+on: workflow_dispatch
+#on: [push, pull_request]
 
 jobs:
   build-espnvs-binaries-arm:
@@ -10,13 +11,16 @@ jobs:
       matrix:
         platform: [armv7, aarch64]
     env:
-      DISTPATH: espnvs-${{ matrix.platform }}
+      DISTPATH: vendored/esp-idf-nvs-partition-gen/espnvs-${{ matrix.platform }}
       #STUBS_DIR: ./espnvs/targets/stub_flasher/
       #EFUSE_DIR: ./espefuse/efuse_defs/
       PIP_EXTRA_INDEX_URL: "https://dl.espressif.com/pypi"
     steps:
       - name: Checkout repository
         uses: actions/checkout@master
+        with:
+          repository: espressif/esp-idf-nvs-partition-gen
+          path: vendored
       - uses: uraimo/run-on-arch-action@v2
         name: Build and test in ${{ matrix.platform }}
         with:
@@ -45,7 +49,7 @@ jobs:
 
             # Build with PyInstaller
             #pyinstaller --distpath ./${{ env.DISTPATH }} -F --icon=ci/espressif.ico --add-data="${{ env.STUBS_DIR }}1/*.json:${{ env.STUBS_DIR }}1/" --add-data="${{ env.STUBS_DIR }}2/*.json:${{ env.STUBS_DIR }}2/" espnvs.py
-            pyinstaller --distpath ./${{ env.DISTPATH }} -F --icon=ci/espressif.ico espnvs.py
+            pyinstaller --distpath ./${{ env.DISTPATH }} -F --icon=ci/espressif.ico -n espnvs vendored/esp-idf-nvs-partition-gen/nvs_partition_gen.py
 
             # Test binaries
             ./${{ env.DISTPATH }}/espnvs -h || exit 1
@@ -84,13 +88,16 @@ jobs:
           SEPARATOR: ':'
           RUN_ON: ubuntu-20.04
     env:
-      DISTPATH: espnvs-${{ matrix.TARGET }}
+      DISTPATH: vendored/esp-idf-nvs-partition-gen/espnvs-${{ matrix.TARGET }}
       #STUBS_DIR: ./espnvs/targets/stub_flasher/
       #EFUSE_DIR: ./espefuse/efuse_defs/
       PIP_EXTRA_INDEX_URL: "https://dl.espressif.com/pypi"
     steps:
       - name: Checkout repository
         uses: actions/checkout@master
+        with:
+          repository: espressif/esp-idf-nvs-partition-gen
+          path: vendored
       - name: Set up Python 3.8
         uses: actions/setup-python@master
         with:
@@ -104,7 +111,7 @@ jobs:
       - name: Build with PyInstaller
         run: |
           #pyinstaller --distpath ./${{ env.DISTPATH }} -F --icon=ci/espressif.ico --add-data="${{ env.STUBS_DIR }}1/*.json${{ matrix.SEPARATOR }}${{ env.STUBS_DIR }}1/" --add-data="${{ env.STUBS_DIR }}2/*.json${{ matrix.SEPARATOR }}${{ env.STUBS_DIR }}2/" espnvs.py
-          pyinstaller --distpath ./${{ env.DISTPATH }} -F --icon=ci/espressif.ico espnvs.py
+          pyinstaller --distpath ./${{ env.DISTPATH }} -F --icon=ci/espressif.ico -n espnvs nvs_partition_gen.py
 #      - name: Sign binaries
 #        if: matrix.platform == 'windows' && github.event_name != 'pull_request'
 #        env:
