@@ -2,7 +2,7 @@
 
 use std::io::Write as _;
 
-use esptools::{Tool, Tools};
+use esptools::Tool;
 
 use log::{error, info, LevelFilter};
 
@@ -16,25 +16,26 @@ fn main() {
 
     let executable = if let Some(executable) = args.next() {
         if let Some(command) = args.next() {
-            let tool = match command.to_ascii_lowercase().as_str() {
-                "tool" | "flash" => Tool::EspTool,
-                "secure" => Tool::EspSecure,
-                "efuse" => Tool::EspEfuse,
-                other => {
-                    error!("Unknown command `{other}`; must be one of `tool` (or `flash`), `secure`, `efuse`");
-                    std::process::exit(1);
-                }
+            let Some(tool) = Tool::iter().find(|tool| tool.cmd_matches(&command)) else {
+                error!(
+                    "Unknown command `{command}`; must be one of {}",
+                    Tool::iter()
+                        .map(|tool| tool.cmd_description().to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                );
+                std::process::exit(1);
             };
 
-            match Tools::mount() {
-                Ok(tools) => {
-                    if let Err(error) = tools.exec(tool, args) {
+            match tool.mount() {
+                Ok(tool) => {
+                    if let Err(error) = tool.exec(args) {
                         error!("Failed to execute `{}`: {}", command, error);
                         std::process::exit(1);
                     }
                 }
                 Err(err) => {
-                    error!("Failed to mount tools: {}", err);
+                    error!("Failed to mount tool: {}", err);
                     std::process::exit(1);
                 }
             }
@@ -47,5 +48,11 @@ fn main() {
         "esptools".to_string()
     };
 
-    info!("Usage: {executable} <command> [<args>]\nWhere <command> is one of `tool`, `secure`, or `efuse`");
+    info!(
+        "Usage: {executable} <command> [<args>]\nWhere <command> is one of {}",
+        Tool::iter()
+            .map(|tool| tool.cmd_description().to_string())
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
 }

@@ -3,151 +3,237 @@
 
 use core::fmt::{self, Display};
 
+use std::collections::BTreeMap;
 use std::ffi::OsStr;
+use std::fs;
+use std::io;
 use std::path::PathBuf;
 use std::sync::Mutex;
-use std::{fs, io};
+
+use flate2::read::GzDecoder;
 
 use log::info;
-pub use zippedtools::Tool;
-use zippedtools::ZipError;
-
-mod zippedtools;
 
 const WINDOWS: bool = cfg!(target_os = "windows");
 
-static MOUNTED: Mutex<bool> = Mutex::new(false);
+static MOUNT_POINTS: Mutex<BTreeMap<Tool, PathBuf>> = Mutex::new(BTreeMap::new());
+
+/// ESP tools supported by this crate
+#[allow(clippy::enum_variant_names)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub enum Tool {
+    /// `esptool.py`
+    #[cfg(feature = "esptool")]
+    EspTool,
+    /// `espsecure.py`
+    #[cfg(feature = "espsecure")]
+    EspSecure,
+    /// `espefuse.py`
+    #[cfg(feature = "espefuse")]
+    EspEfuse,
+    /// `esp-idf-nvs-partition-gen.py`
+    #[cfg(feature = "espidfnvs")]
+    EspIdfNvs,
+}
 
 impl Tool {
-    const fn sha1(&self) -> &str {
-        Tools::ESPTOOLS_SHA1[*self as usize]
-    }
-
-    fn expanded_name(&self) -> String {
-        format!(
-            "{}-{}{}",
-            self.basename(),
-            self.sha1(),
-            if WINDOWS { ".exe" } else { "" }
-        )
-    }
-}
-
-/// Error type for the `Tools` struct
-#[derive(Debug)]
-pub enum ToolsError {
-    /// The tools have already been mounted
-    AlreadyMounted,
-    /// The tools could not be mounted
-    MountFailed,
-    /// A ZIP error occurred
-    Zip(ZipError),
-}
-
-impl Display for ToolsError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Self::AlreadyMounted => write!(f, "Tools already created"),
-            Self::MountFailed => write!(f, "Tools creation failed"),
-            Self::Zip(e) => write!(f, "Zip error: {e}"),
-        }
-    }
-}
-
-impl core::error::Error for ToolsError {}
-
-impl From<ZipError> for ToolsError {
-    fn from(e: ZipError) -> Self {
-        Self::Zip(e)
-    }
-}
-
-/// A struct for managing the Espressif `esptools` binaries
-pub struct Tools(PathBuf);
-
-impl Tools {
-    const ESPTOOLS_ZIP: &[u8] = include_bytes!(env!("ESPTOOLS_ZIP_FILE"));
-    //const ESPTOOLS_VERSION: &str = env!("ESPTOOLS_VERSION");
-
-    const ESPTOOLS_SHA1: &[&str] = &[
-        env!("ESPTOOL_SHA1"),
-        env!("ESPSECURE_SHA1"),
-        env!("ESPEFUSE_SHA1"),
+    const SHA1: &[&str] = &[
+        #[cfg(feature = "esptool")]
+        env!("TOOL_ESPTOOL_SHA1"),
+        #[cfg(feature = "espsecure")]
+        env!("TOOL_ESPSECURE_SHA1"),
+        #[cfg(feature = "espefuse")]
+        env!("TOOL_ESPEFUSE_SHA1"),
+        #[cfg(feature = "espidfnvs")]
+        env!("TOOL_ESPIDFNVS_SHA1"),
     ];
 
-    /// Mount the tools
+    const GZ_BINARY: &[&[u8]] = &[
+        #[cfg(feature = "esptool")]
+        include_bytes!(env!("TOOL_ESPTOOL")),
+        #[cfg(feature = "espsecure")]
+        include_bytes!(env!("TOOL_ESPSECURE")),
+        #[cfg(feature = "espefuse")]
+        include_bytes!(env!("TOOL_ESPEFUSE")),
+        #[cfg(feature = "espidfnvs")]
+        include_bytes!(env!("TOOL_ESPIDFNVS")),
+    ];
+
+    /// Mount a tool
     ///
-    /// This ensures that the tools are expanded in a cache directory private to the crate
-    /// and are ready for use.
-    ///
-    /// Note that the tools can be mounted only once in the application i.e. they are a singleton.
+    /// This ensures that the tool is expanded in a cache directory private to the crate
+    /// and is ready for use.
     ///
     /// # Returns
-    /// * `Ok(Tools)` if the tools were successfully mounted
-    /// * `Err(ToolsError)` if the tools could not be mounted
-    pub fn mount() -> Result<Self, ToolsError> {
-        let mut mounted = MOUNTED.lock().unwrap();
+    /// * `Ok(MountedTool)` if the tool was successfully mounted
+    /// * `Err(std::io::Error)` if the tool could not be mounted
+    pub fn mount(&self) -> Result<MountedTool, io::Error> {
+        let mut mount_points = MOUNT_POINTS.lock().unwrap();
 
-        if *mounted {
-            Err(ToolsError::AlreadyMounted)?;
+        if mount_points.contains_key(self) {
+            return Ok(MountedTool(*self));
         }
 
         let project_dirs = directories::ProjectDirs::from("org", "ivmarkov", "esptools")
-            .ok_or(ToolsError::MountFailed)?;
+            .ok_or(io::ErrorKind::NotFound)?;
 
         let tools_dir = project_dirs.cache_dir().to_path_buf();
-        let mut zip = None;
 
-        for tool in Tool::iter() {
-            let tool_file = tools_dir.join(tool.expanded_name());
+        let path = tools_dir.join(self.sha1()).join(self.name(WINDOWS));
 
-            if !tool_file.exists() {
-                fs::create_dir_all(tool_file.parent().unwrap()).map_err(ZipError::Io)?;
+        if !path.exists() {
+            fs::create_dir_all(path.parent().unwrap())?;
 
-                if zip.is_none() {
-                    zip = Some(zippedtools::ZippedTools::new(
-                        SliceReader::new(Self::ESPTOOLS_ZIP),
-                        WINDOWS,
-                    )?);
-                }
+            let mut read = GzDecoder::new(SliceReader::new(self.gz()));
+            let mut write = fs::File::create(&path)?;
 
-                zip.as_mut().unwrap().extract(tool, &tool_file)?;
+            io::copy(&mut read, &mut write)?;
+
+            #[cfg(unix)]
+            {
+                use std::fs::Permissions;
+                use std::os::unix::fs::PermissionsExt;
+
+                std::fs::set_permissions(&path, Permissions::from_mode(0o755))?;
             }
         }
 
-        *mounted = true;
-        info!("Tools mounted in `{}`", tools_dir.display());
+        mount_points.insert(*self, path.clone());
 
-        Ok(Self(tools_dir))
+        info!("Tool {self} mounted as `{}`", path.display());
+
+        Ok(MountedTool(*self))
     }
 
-    /// Get the path to a tool
-    ///
-    /// Note that the path is only valid while the `Tools` struct is in scope.
-    ///
-    /// # Arguments
-    /// * `tool` - the tool to get the path for
-    pub fn tool_path(&self, tool: Tool) -> PathBuf {
-        self.0.join(tool.expanded_name())
+    #[allow(unused)]
+    #[allow(unreachable_patterns)]
+    pub fn cmd_matches(&self, _cmd: &str) -> bool {
+        let _cmd = _cmd.to_ascii_lowercase();
+        let _cmd = _cmd.as_str();
+
+        match self {
+            #[cfg(feature = "esptool")]
+            Self::EspTool => matches!(_cmd, "tool" | "flash"),
+            #[cfg(feature = "espsecure")]
+            Self::EspSecure => matches!(_cmd, "secure"),
+            #[cfg(feature = "espefuse")]
+            Self::EspEfuse => matches!(_cmd, "efuse"),
+            #[cfg(feature = "espidfnvs")]
+            Self::EspIdfNvs => matches!(_cmd, "idfnvs"),
+            _ => unreachable!(),
+        }
     }
 
-    /// Execute a tool with the provided arguments.
+    #[allow(unused)]
+    #[allow(unreachable_patterns)]
+    pub const fn cmd_description(&self) -> &str {
+        match self {
+            #[cfg(feature = "esptool")]
+            Self::EspTool => "`tool` (or `flash`)",
+            #[cfg(feature = "espsecure")]
+            Self::EspSecure => "`secure`",
+            #[cfg(feature = "espefuse")]
+            Self::EspEfuse => "`efuse`",
+            #[cfg(feature = "espidfnvs")]
+            Self::EspIdfNvs => "`idfnvs`",
+            _ => unreachable!(),
+        }
+    }
+
+    /// Return an iterator over all tools
+    #[allow(unused)]
+    pub fn iter() -> impl Iterator<Item = Self> {
+        [
+            #[cfg(feature = "esptool")]
+            Self::EspTool,
+            #[cfg(feature = "espsecure")]
+            Self::EspSecure,
+            #[cfg(feature = "espefuse")]
+            Self::EspEfuse,
+            #[cfg(feature = "espidfnvs")]
+            Self::EspIdfNvs,
+        ]
+        .into_iter()
+    }
+
+    /// Return the base file name of the tool
+    #[allow(unreachable_patterns)]
+    const fn basename(&self) -> &str {
+        match self {
+            #[cfg(feature = "esptool")]
+            Self::EspTool => "esptool",
+            #[cfg(feature = "espsecure")]
+            Self::EspSecure => "espsecure",
+            #[cfg(feature = "espefuse")]
+            Self::EspEfuse => "espefuse",
+            #[cfg(feature = "espidfnvs")]
+            Self::EspIdfNvs => "espidfnvs",
+            _ => unreachable!(),
+        }
+    }
+
+    /// Return the file name of the tool
+    #[allow(unreachable_patterns)]
+    const fn name(&self, windows: bool) -> &str {
+        if windows {
+            match self {
+                #[cfg(feature = "esptool")]
+                Self::EspTool => "esptool.exe",
+                #[cfg(feature = "espsecure")]
+                Self::EspSecure => "espsecure.exe",
+                #[cfg(feature = "espefuse")]
+                Self::EspEfuse => "espefuse.exe",
+                #[cfg(feature = "espidfnvs")]
+                Self::EspIdfNvs => "espidfnvs.exe",
+                _ => unreachable!(),
+            }
+        } else {
+            self.basename()
+        }
+    }
+
+    /// Return the SHA1 hash of the tool
+    const fn sha1(&self) -> &str {
+        Self::SHA1[*self as usize]
+    }
+
+    /// Return the gzipped binary of the tool
+    const fn gz(&self) -> &[u8] {
+        Self::GZ_BINARY[*self as usize]
+    }
+}
+
+impl Display for Tool {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.basename())
+    }
+}
+
+/// A mounted tool
+pub struct MountedTool(Tool);
+
+impl MountedTool {
+    /// Get the path to the mounted tool
+    pub fn path(&self) -> PathBuf {
+        MOUNT_POINTS.lock().unwrap().get(&self.0).unwrap().clone()
+    }
+
+    /// Execute the mounted tool with the provided arguments.
     ///
     /// # Arguments
-    /// * `tool` - the tool to execute
     /// * `args` - the arguments to pass to the tool
     ///
     /// # Returns
     /// * `Ok(ExitStatus)` if the tool was executed successfully
     /// * `Err(io::Error)` if the tool could not be executed
-    pub fn exec<I>(&self, tool: Tool, args: I) -> io::Result<std::process::ExitStatus>
+    pub fn exec<I>(&self, args: I) -> io::Result<std::process::ExitStatus>
     where
         I: IntoIterator,
         I::Item: AsRef<OsStr>,
     {
-        info!("Executing `{tool}`");
+        info!("Executing `{}`", self.0);
 
-        let mut cmd = std::process::Command::new(self.tool_path(tool));
+        let mut cmd = std::process::Command::new(self.path());
 
         cmd.args(args);
 
@@ -156,15 +242,6 @@ impl Tools {
         info!("Status {result:?}");
 
         result
-    }
-}
-
-impl Drop for Tools {
-    fn drop(&mut self) {
-        let mut mounted = MOUNTED.lock().unwrap();
-        *mounted = false;
-
-        info!("Tools unmounted");
     }
 }
 

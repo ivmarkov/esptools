@@ -18,19 +18,23 @@ required-features = ["bin"]
 
 [features]
 default = ["bin"]
-bin = ["env_logger"]
+bin = ["env_logger", "esptool", "espsecure", "espefuse", "espidfnvs"]
+esptool = []
+espsecure = []
+espefuse = []
+espidfnvs = []
 
 [dependencies]
 log = "0.4"
-zip = "2"
-sha1 = "0.10"
-hex = "0.4"
+flate2 = "1"
 directories = "3"
 env_logger = { version = "0.11", optional = true }
 
 [build-dependencies]
 log = "0.4"
 zip = "2"
+flate2 = "1"
+tar = "0.4"
 sha1 = "0.10"
 hex = "0.4"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "charset", "blocking"] }
