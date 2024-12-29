@@ -22,7 +22,7 @@ Bundles the ESP tools as a Rust library.
 **NOTE: Licensing**
 
 While the `esptools` crate is licensed under Apache + MIT (as usual with Rust), the bundled (and thus distributed) binaries of `esptool`, `espsecure` and `espefuse` [are licensed under the **GPL v2**](https://github.com/espressif/esptool/blob/master/LICENSE). (This does not apply to `espidfnvs` 
-a.k.a. `esp-idf-nvs-partition-gen`, which is a separate repo [licensed under the Aapache license](https://github.com/espressif/esp-idf-nvs-partition-gen/blob/main/LICENSE).)
+a.k.a. `esp-idf-nvs-partition-gen`, which is a separate repo [licensed under the Apache license](https://github.com/espressif/esp-idf-nvs-partition-gen/blob/main/LICENSE).)
 
 With that said, [distributing those should be OK](https://www.reddit.com/r/opensource/comments/nok8lg/include_binaries_of_a_gpl_licensed_program/), as we are providing a [link](https://github.com/espressif/esptool) to the upstream Espressif GIT repo containing the binaries' source code, as well as [the download location of the binaries themselves](https://github.com/espressif/esptool/releases/tag/v4.8.1).
 
