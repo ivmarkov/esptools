@@ -49,7 +49,7 @@ fn main() {
 
     let image = match target_os.as_str() {
         "windows" => (target_arch == "x86_64").then_some(SUFFIX_WIN64),
-        "macos" => (target_arch == "x86_64").then_some(SUFFIX_MACOS),
+        "macos" => (target_arch == "x86_64" || target_arch == "aarch64").then_some(SUFFIX_MACOS),
         "linux" => (target_env == "gnu")
             .then_some(match target_arch.as_str() {
                 "x86_64" => Some(SUFFIX_LINUX_AMD64),
