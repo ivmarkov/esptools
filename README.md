@@ -37,7 +37,7 @@ If you distribute - outside of your premises and e.g. the factory flashing your 
 ### Command line
 
 ```sh
-cargo install --force --git https://github.com/ivmarkov/esptools
+cargo install esptools
 esptools efuse -h
 ```
 
@@ -48,3 +48,37 @@ fn main() -> anyhow::Result<()> {
     esptools::Tool::EspEfuse.mount()?.exec(&["-h"])
 }
 ```
+
+## Cross-building for other targets than the host one
+
+`esptools` is pure-Rust so you only need a [linker for your cross-target](https://capnfabs.net/posts/cross-compiling-rust-apps-raspberry-pi/) and a C cross toolchain for the few dependencies that still need to compile custom C files (`ring`).
+
+Sample ways to cross-compile:
+
+(If `cargo` greets you with a "note: the `XXX` target may not be installed" error, install the target first with `rustup target add XXX`.)
+
+### With [`cargo-zigbuild`](https://github.com/rust-cross/cargo-zigbuild) 
+
+```sh
+cargo install cargo-zigbuild
+pip3 install zig
+cargo zigbuild --target aarch64-unknown-linux-gnu # rPI 4+
+```
+
+> Note: does not support cross-compiling to Windows. For Windows, use some of the other options.
+
+### With [`cargo-xwin`](https://github.com/rust-cross/cargo-xwin) 
+
+```sh
+cargo install cargo-xwin
+cargo xwin build --target x86_64-pc-windows-msvc
+```
+
+### With [`cross`](https://hackernoon.com/building-a-wireless-thermostat-in-rust-for-raspberry-pi-part-2) 
+
+```sh
+cargo install cross
+cross build --target=x86_64-pc-windows-gnu # For e.g. Windows; Windows MSVC is not supported, only the GNU target
+```
+
+> Note: needs Docker or Podman pre-installed.
