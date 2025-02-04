@@ -31,6 +31,13 @@ const SUFFIX_LINUX_AMD64: &str = "linux-amd64";
 const SUFFIX_LINUX_ARM64: &str = "linux-arm64";
 const SUFFIX_LINUX_ARM32: &str = "linux-arm32";
 
+const SUFFIX_ESPIDFNVS_WIN64: &str = SUFFIX_WIN64;
+const SUFFIX_ESPIDFNVS_LINUX_AMD64: &str = SUFFIX_LINUX_AMD64;
+const SUFFIX_ESPIDFNVS_LINUX_ARM64: &str = "aarch64"; // TODO: Fix this in `esp-idf-nvs-partition-gen`
+const SUFFIX_ESPIDFNVS_LINUX_ARM32: &str = "armv7"; // TODO: Fix this in `esp-idf-nvs-partition-gen`
+const SUFFIX_ESPIDFNVS_MACOS_AMD64: &str = "macos-amd64";
+const SUFFIX_ESPIDFNVS_MACOS_ARM64: &str = "macos-arm64";
+
 /// Download the `esptools` & `espidfnvs` archive files and bundle
 /// the executables inside those with this crate using `include_bytes!`
 fn main() {
@@ -47,25 +54,27 @@ fn main() {
 
     let out = PathBuf::from(std::env::var("OUT_DIR").unwrap());
 
-    let image = match target_os.as_str() {
-        "windows" => (target_arch == "x86_64").then_some(SUFFIX_WIN64),
-        "macos" => (target_arch == "x86_64" || target_arch == "aarch64").then_some(SUFFIX_MACOS),
-        "linux" => (target_env == "gnu")
-            .then_some(match target_arch.as_str() {
-                "x86_64" => Some(SUFFIX_LINUX_AMD64),
-                "aarch64" => Some(SUFFIX_LINUX_ARM64),
-                "arm" => Some(SUFFIX_LINUX_ARM32),
-                _ => None,
-            })
-            .flatten(),
-        _ => None,
-    };
-
-    let Some(image) = image else {
-        panic!("Unsupported target: os={target_os}, arch={target_arch}, env={target_env}");
-    };
-
     if esptool || espsecure || espefuse {
+        let image = match target_os.as_str() {
+            "windows" => (target_arch == "x86_64").then_some(SUFFIX_WIN64),
+            "macos" => {
+                (target_arch == "x86_64" || target_arch == "aarch64").then_some(SUFFIX_MACOS)
+            }
+            "linux" => (target_env == "gnu")
+                .then_some(match target_arch.as_str() {
+                    "x86_64" => Some(SUFFIX_LINUX_AMD64),
+                    "aarch64" => Some(SUFFIX_LINUX_ARM64),
+                    "arm" => Some(SUFFIX_LINUX_ARM32),
+                    _ => None,
+                })
+                .flatten(),
+            _ => None,
+        };
+
+        let Some(image) = image else {
+            panic!("Unsupported target: os={target_os}, arch={target_arch}, env={target_env}");
+        };
+
         process_archive(
             &out,
             &format!(
@@ -84,6 +93,25 @@ fn main() {
     }
 
     if espidfnvs {
+        let image = match target_os.as_str() {
+            "windows" => (target_arch == "x86_64").then_some(SUFFIX_ESPIDFNVS_WIN64),
+            "macos" if target_arch == "x86_64" => Some(SUFFIX_ESPIDFNVS_MACOS_AMD64),
+            "macos" if target_arch == "aarch64" => Some(SUFFIX_ESPIDFNVS_MACOS_ARM64),
+            "linux" => (target_env == "gnu")
+                .then_some(match target_arch.as_str() {
+                    "x86_64" => Some(SUFFIX_ESPIDFNVS_LINUX_AMD64),
+                    "aarch64" => Some(SUFFIX_ESPIDFNVS_LINUX_ARM64),
+                    "arm" => Some(SUFFIX_ESPIDFNVS_LINUX_ARM32),
+                    _ => None,
+                })
+                .flatten(),
+            _ => None,
+        };
+
+        let Some(image) = image else {
+            panic!("Unsupported target: os={target_os}, arch={target_arch}, env={target_env}");
+        };
+
         process_archive(
             &out,
             &format!("{GIT_REPO_ESPIDFNVS}/{VERSION_ESPIDFNVS}/{PREFIX_ESPIDFNVS}-{VERSION_ESPIDFNVS}-{image}{}", if windows { ".zip" } else { ".tar.gz" }),
